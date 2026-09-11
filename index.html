@@ -108,7 +108,7 @@
             font-weight: 600;
         }
 
-        /* Calendar Grid Style - Compacted to remove bottom space */
+        /* Calendar Grid Style */
         .weekdays {
             display: grid;
             grid-template-columns: repeat(7, 1fr);
@@ -116,14 +116,14 @@
             font-size: 11px;
             font-weight: 600;
             color: var(--ios-secondary);
-            padding: 8px 0;
+            padding: 10px 0;
             border-bottom: 0.5px solid #eee;
         }
 
         .days-grid {
             display: grid;
             grid-template-columns: repeat(7, 1fr);
-            padding: 4px 8px;
+            padding: 8px;
         }
 
         .day-cell {
@@ -132,12 +132,12 @@
             flex-direction: column;
             align-items: center;
             justify-content: flex-start;
-            padding-top: 6px;
+            padding-top: 10px;
             cursor: pointer;
-            border-radius: 50%;
-            margin: 3px auto;
-            width: 38px;
-            height: 38px;
+            border-radius: 12px;
+            margin: 4px auto;
+            width: 44px;
+            height: 52px;
             transition: background 0.2s;
         }
 
@@ -146,7 +146,7 @@
         }
 
         .day-number {
-            font-size: 14px;
+            font-size: 15px;
             font-weight: 400;
         }
 
@@ -154,12 +154,22 @@
             background-color: var(--ios-red);
             color: white;
             border-radius: 50%;
-            width: 26px;
-            height: 26px;
+            width: 28px;
+            height: 28px;
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: 600;
+        }
+
+        /* Dots Container */
+        .event-dots-container {
+            display: flex;
+            gap: 3px;
+            margin-top: 6px;
+            align-items: center;
+            justify-content: center;
+            height: 6px;
         }
 
         .event-dot {
@@ -167,7 +177,45 @@
             height: 4px;
             background-color: var(--ios-blue);
             border-radius: 50%;
-            margin-top: 2px;
+        }
+
+        .event-dot.holiday {
+            background-color: var(--ios-red);
+        }
+
+        /* Notifications Section Below Calendar */
+        .notifications-section {
+            margin: 12px 16px;
+            background: #ffffff;
+            border: 0.5px solid var(--ios-border);
+            border-radius: 12px;
+            padding: 12px 16px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+        }
+
+        .notifications-header {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--ios-blue);
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .notification-card-item {
+            font-size: 13px;
+            color: var(--ios-text);
+            background: #f2f2f7;
+            padding: 8px 12px;
+            border-radius: 8px;
+            margin-bottom: 6px;
+            line-height: 1.4;
+            white-space: pre-line;
+        }
+
+        .notification-card-item:last-child {
+            margin-bottom: 0;
         }
 
         /* Matrix Timetable View Style */
@@ -330,6 +378,12 @@
         </div>
 
         <div class="days-grid" id="daysGrid"></div>
+
+        <!-- Notifications Container Below Calendar -->
+        <div class="notifications-section" id="notificationsSection" style="display: none;">
+            <div class="notifications-header">📢 Notifications</div>
+            <div id="notificationsList"></div>
+        </div>
     </div>
 
     <div id="timetableView" class="view-section">
@@ -353,6 +407,7 @@
 
 <script>
     let eventsData = {}; 
+    let notificationsData = [];
     let timetableData = {}; 
     let currentDate = new Date(2026, 8, 1);
 
@@ -376,6 +431,7 @@
 
             document.getElementById('loadingStatus').style.display = 'none';
             renderCalendar();
+            renderNotifications();
             renderTimetableTab();
         } catch (error) {
             console.error('Error loading sheets:', error);
@@ -391,11 +447,16 @@
             if (cols.length >= 2) {
                 const rawDate = cols[0] ? cols[0].trim() : '';
                 const msg = cols[1] ? cols[1].trim() : '';
+                const flag = cols.length >= 3 && cols[2] ? cols[2].trim().toLowerCase() : ''; // Checking 3rd column
                 const formattedDate = parseCustomDate(rawDate);
 
                 if (formattedDate && msg) {
-                    if (!eventsData[formattedDate]) eventsData[formattedDate] = [];
-                    eventsData[formattedDate].push(msg);
+                    if (flag.includes('notification')) {
+                        notificationsData.push({ date: formattedDate, text: msg });
+                    } else {
+                        if (!eventsData[formattedDate]) eventsData[formattedDate] = [];
+                        eventsData[formattedDate].push({ text: msg, flag: flag });
+                    }
                 }
             }
         }
@@ -479,14 +540,52 @@
             dayCell.appendChild(dayNum);
 
             if (eventsData[dateStr] && eventsData[dateStr].length > 0) {
-                const dot = document.createElement('div');
-                dot.className = 'event-dot';
-                dayCell.appendChild(dot);
+                const dotsContainer = document.createElement('div');
+                dotsContainer.className = 'event-dots-container';
+
+                const entries = eventsData[dateStr];
+                const maxDots = Math.min(entries.length, 3);
+
+                for (let k = 0; k < maxDots; k++) {
+                    const dot = document.createElement('div');
+                    dot.className = 'event-dot';
+                    
+                    // Check flag from 3rd column for holiday
+                    if (entries[k].flag && entries[k].flag.includes('holiday')) {
+                        dot.classList.add('holiday');
+                    }
+                    dotsContainer.appendChild(dot);
+                }
+                dayCell.appendChild(dotsContainer);
             }
 
             const dateObj = new Date(year, month, day);
             dayCell.onclick = () => openDayDetails(dateStr, dateObj);
             grid.appendChild(dayCell);
+        }
+        renderNotifications();
+    }
+
+    function renderNotifications() {
+        const container = document.getElementById('notificationsList');
+        const section = document.getElementById('notificationsSection');
+        container.innerHTML = '';
+
+        const todayStr = new Date().toISOString().split('T')[0];
+        
+        // Show notifications where today <= notification expiry date
+        const activeNotifs = notificationsData.filter(n => n.date >= todayStr);
+
+        if (activeNotifs.length > 0) {
+            section.style.display = 'block';
+            activeNotifs.forEach(n => {
+                const div = document.createElement('div');
+                div.className = 'notification-card-item';
+                div.innerText = n.text;
+                container.appendChild(div);
+            });
+        } else {
+            section.style.display = 'none';
         }
     }
 
@@ -553,10 +652,10 @@
         listEl.innerHTML = '';
 
         if (eventsData[dateStr] && eventsData[dateStr].length > 0) {
-            eventsData[dateStr].forEach(text => {
+            eventsData[dateStr].forEach(item => {
                 const div = document.createElement('div');
                 div.className = 'event-item';
-                div.innerText = text;
+                div.innerText = item.text;
                 listEl.appendChild(div);
             });
         } else {
