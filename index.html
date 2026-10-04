@@ -409,7 +409,8 @@
     let eventsData = {}; 
     let notificationsData = [];
     let timetableData = {}; 
-    let currentDate = new Date(2026, 8, 1);
+    let currentDate = new Date();
+    currentDate.setDate(1); // Set to the 1st of the current month
 
     async function fetchAllSheets() {
         const eventsUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQsu-5jcbhuv1VIsEZHQp_6YKrZjz4tuZ2GyDYXrR7JAryBHmtVVKo1gmpKdACiVlvHkiR8KYcKqov_/pub?gid=0&single=true&output=csv';
